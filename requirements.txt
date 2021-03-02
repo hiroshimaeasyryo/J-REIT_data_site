@@ -1,4 +1,5 @@
 Brotli==1.0.9
+beautifulsoup4
 click==7.1.2
 dash==1.19.0
 dash-core-components==1.15.0
@@ -8,7 +9,9 @@ dash-table==4.11.2
 Flask==1.1.2
 Flask-Compress==1.9.0
 future==0.18.2
+gevent
 gunicorn
+html5lib
 itsdangerous==1.1.0
 Jinja2==2.11.3
 MarkupSafe==1.1.1
