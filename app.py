@@ -9,9 +9,53 @@ import datetime
 import itertools
 from sklearn import linear_model
 import statsmodels.api as sm
+from rq import Queue
+from worker import conn
+from bottle import route, run
 
 
 app = dash.Dash(__name__)
+
+
+q = Queue(connection=conn)
+
+@route('/index')
+def index():
+    result = q.enqueue(background_process, '引数１')
+    return result
+
+def background_process(name):
+    # ここに時間のかかる処理を書く
+    # 対象銘柄のticker code
+    ticker = "8951"
+    ticker_codes = list(pd.read_html('https://j-reit.jp/brand/')[1][0].values)
+
+    # 東証REIT指数のデータを取得
+    reitsheet = pd.read_html(
+        "https://finance.matsui.co.jp/Stocks/matsui/contents/stockDetail.aspx?cntcode=JP&skubun=0&stkcode=0075&exctype=01&tab=2&pnum=6M&ptype=W#",
+        flavor='bs4')[0]
+    reit_w_udratio = reitsheet[::-1]['終値'].pct_change().dropna() * 100
+
+    weekly_ratios = []
+    for c in list(pd.read_html('https://j-reit.jp/brand/')[1][0].values):
+        weekly_ratios.append(pd.read_html(
+            "https://finance.matsui.co.jp/Stocks/matsui/contents/stockDetail.aspx?cntcode=JP&skubun=1&stkcode=" + str(
+                c) + "&exctype=01&tab=3&pnum=6M&ptype=W#'",
+            flavor='bs4')[0][::-1]['終値'].pct_change().dropna() * 100)
+    tchange_df = pd.DataFrame(weekly_ratios, index=list(pd.read_html('https://j-reit.jp/brand/')[1][0].values)).T
+    df = tchange_df.add_prefix('ticker')
+    df['J-REIT Index'] = reit_w_udratio
+
+    # 対象銘柄のデータを取得
+    target_sheet = pd.read_html(
+        "https://finance.matsui.co.jp/Stocks/matsui/contents/stockDetail.aspx?cntcode=JP&skubun=1&stkcode=" + ticker + "&exctype=01&tab=3&pnum=6M&ptype=W#'",
+        flavor='bs4')[0]
+    target_udratio = target_sheet[::-1]['終値'].pct_change().dropna() * 100
+
+    return name * 10
+
+run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
+
 
 # # Tokyo data
 # row_data = pd.read_csv('https://stopcovid19.metro.tokyo.lg.jp/data/130001_tokyo_covid19_patients.csv')
@@ -65,30 +109,6 @@ def calc_beta_alpha(x, y):
     print("β = ", list(itertools.chain.from_iterable(clf.coef_)))
     print("α = ", clf.intercept_)
 
-# 対象銘柄のticker code
-ticker = "8951"
-ticker_codes = list(pd.read_html('https://j-reit.jp/brand/')[1][0].values)
-
-# 東証REIT指数のデータを取得
-reitsheet = pd.read_html(
-    "https://finance.matsui.co.jp/Stocks/matsui/contents/stockDetail.aspx?cntcode=JP&skubun=0&stkcode=0075&exctype=01&tab=2&pnum=6M&ptype=W#",
-    flavor='bs4')[0]
-reit_w_udratio = reitsheet[::-1]['終値'].pct_change().dropna() * 100
-
-weekly_ratios = []
-for c in list(pd.read_html('https://j-reit.jp/brand/')[1][0].values):
-    weekly_ratios.append(pd.read_html(
-    "https://finance.matsui.co.jp/Stocks/matsui/contents/stockDetail.aspx?cntcode=JP&skubun=1&stkcode=" + str(c) + "&exctype=01&tab=3&pnum=6M&ptype=W#'",
-    flavor='bs4')[0][::-1]['終値'].pct_change().dropna() * 100)
-tchange_df = pd.DataFrame(weekly_ratios, index=list(pd.read_html('https://j-reit.jp/brand/')[1][0].values)).T
-df = tchange_df.add_prefix('ticker')
-df['J-REIT Index'] = reit_w_udratio
-
-# 対象銘柄のデータを取得
-target_sheet = pd.read_html(
-    "https://finance.matsui.co.jp/Stocks/matsui/contents/stockDetail.aspx?cntcode=JP&skubun=1&stkcode=" + ticker + "&exctype=01&tab=3&pnum=6M&ptype=W#'",
-    flavor='bs4')[0]
-target_udratio = target_sheet[::-1]['終値'].pct_change().dropna() * 100
 
 
 # Layout
