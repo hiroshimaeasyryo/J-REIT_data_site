@@ -68,22 +68,33 @@ def calc_beta_alpha(x, y):
 
 # 対象銘柄のticker code
 ticker = "8951"
+ticker_codes = list(pd.read_html('https://j-reit.jp/brand/')[1][0].values)
 
 # 東証REIT指数のデータを取得
 reitsheet = pd.read_html(
-    "https://finance.matsui.co.jp/Stocks/matsui/contents/stockDetail.aspx?cntcode=JP&skubun=0&stkcode=0075&exctype=01&tab=2&pnum=1Y&ptype=W#",
+    "https://finance.matsui.co.jp/Stocks/matsui/contents/stockDetail.aspx?cntcode=JP&skubun=0&stkcode=0075&exctype=01&tab=2&pnum=6M&ptype=W#",
     flavor='bs4')[0]
 reit_w_udratio = reitsheet[::-1]['終値'].pct_change().dropna() * 100
 
+weekly_ratios = []
+for c in list(pd.read_html('https://j-reit.jp/brand/')[1][0].values):
+    weekly_ratios.append(pd.read_html(
+    "https://finance.matsui.co.jp/Stocks/matsui/contents/stockDetail.aspx?cntcode=JP&skubun=1&stkcode=" + str(c) + "&exctype=01&tab=3&pnum=6M&ptype=W#'",
+    flavor='bs4')[0][::-1]['終値'].pct_change().dropna() * 100)
+tchange_df = pd.DataFrame(weekly_ratios, index=list(pd.read_html('https://j-reit.jp/brand/')[1][0].values)).T
+df = tchange_df.add_prefix('ticker')
+df['J-REIT Index'] = reit_w_udratio
+
 # 対象銘柄のデータを取得
 target_sheet = pd.read_html(
-    "https://finance.matsui.co.jp/Stocks/matsui/contents/stockDetail.aspx?cntcode=JP&skubun=1&stkcode=" + ticker + "&exctype=01&tab=3&pnum=1Y&ptype=W#'",
+    "https://finance.matsui.co.jp/Stocks/matsui/contents/stockDetail.aspx?cntcode=JP&skubun=1&stkcode=" + ticker + "&exctype=01&tab=3&pnum=6M&ptype=W#'",
     flavor='bs4')[0]
 target_udratio = target_sheet[::-1]['終値'].pct_change().dropna() * 100
 
 # 単回帰分析
-ud_df = pd.DataFrame({"J-REIT Index": reit_w_udratio,
-                      "ticker" + ticker: target_udratio})
+# ud_df = pd.DataFrame({"J-REIT Index": reit_w_udratio,
+#                       "ticker" + ticker: target_udratio})
+
 
 
 # Layout
@@ -140,21 +151,41 @@ app.layout = html.Div(
                 )
             ,
         html.H1(children='J-REIT Index α & β'),
-                dcc.Graph(
-                    id='graph4',
-                    figure=px.scatter(
-                        ud_df,
-                        x="J-REIT Index",
-                        y="ticker" + ticker,
-                        marginal_y="violin",
-                        marginal_x="box",
-                        trendline="ols",
-                        template="simple_white"
-                    )
-                ),
+        dcc.Input(id='ticker_symbol',
+                  value='8951'),
+        dcc.Graph(
+            id='graph4',
+            figure=px.scatter(
+                df,
+                x="J-REIT Index",
+                y="ticker" + ticker,
+                marginal_y="violin",
+                marginal_x="box",
+                trendline="ols",
+                template="simple_white",
+            ),
+            style={'width': '50%'}
+        ),
+
     ]
 )
 
+
+from dash.dependencies import Input, Output
+@app.callback(
+    Output('graph4', 'figure'),
+    [Input('ticker_symbol', 'value')])
+def update_graph(stock_ticker):
+    fig = px.scatter(
+            df,
+            x="J-REIT Index",
+            y="ticker" + stock_ticker,
+            marginal_y="violin",
+            marginal_x="box",
+            trendline="ols",
+            template="simple_white"
+            )
+    return fig
 
 server = app.server
 
