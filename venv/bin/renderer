@@ -1,12 +1,8 @@
-#!/Users/higashiyama/Desktop/Python/website3/venv/bin/python3
-# EASY-INSTALL-ENTRY-SCRIPT: 'dash==1.19.0','console_scripts','renderer'
-__requires__ = 'dash==1.19.0'
+#!/Users/higashiyama/Desktop/Python/website3/venv/bin/python
+# -*- coding: utf-8 -*-
 import re
 import sys
-from pkg_resources import load_entry_point
-
+from dash.development.build_process import renderer
 if __name__ == '__main__':
-    sys.argv[0] = re.sub(r'(-script\.pyw?|\.exe)?$', '', sys.argv[0])
-    sys.exit(
-        load_entry_point('dash==1.19.0', 'console_scripts', 'renderer')()
-    )
+    sys.argv[0] = re.sub(r'(-script\.pyw|\.exe)?$', '', sys.argv[0])
+    sys.exit(renderer())

@@ -10,9 +10,16 @@ import datetime
 import itertools
 from sklearn import linear_model
 import statsmodels.api as sm
+from rq import Queue
+from worker import conn
+from utils import count_words_at_url
+
 
 
 app = dash.Dash(__name__)
+
+q = Queue(connection=conn)
+result = q.enqueue(count_words_at_url, 'http://heroku.com')
 
 # Tokyo data
 row_data = pd.read_csv('https://stopcovid19.metro.tokyo.lg.jp/data/130001_tokyo_covid19_patients.csv')
