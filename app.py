@@ -10,16 +10,11 @@ import datetime
 import itertools
 from sklearn import linear_model
 import statsmodels.api as sm
-from rq import Queue
-from worker import conn
-from utils import count_words_at_url
 
 
 
 app = dash.Dash(__name__)
 
-q = Queue(connection=conn)
-result = q.enqueue(count_words_at_url, 'http://heroku.com')
 
 # Tokyo data
 row_data = pd.read_csv('https://stopcovid19.metro.tokyo.lg.jp/data/130001_tokyo_covid19_patients.csv')
@@ -37,7 +32,7 @@ daily_cases.index = datetimes
 seasonal = sm.tsa.seasonal_decompose(daily_cases.counts, period=7)
 daily_cases['trend'] = seasonal.trend
 
-# Kanagawaデータ
+# Kanagawa data
 kan_row = pd.read_csv('https://www.pref.kanagawa.jp/osirase/1369/data/csv/patient.csv', encoding="shift-jis")
 kan_by_day = kan_row.groupby('発表日')
 kan_dates = []
@@ -53,7 +48,7 @@ kan_daily_cases.index = kan_datetimes
 kan_seasonal = sm.tsa.seasonal_decompose(kan_daily_cases.counts, period=7)
 kan_daily_cases['trend'] = kan_seasonal.trend
 
-# 大阪府データ
+# Osaka data
 osk_row = pd.read_csv('https://covid19-osaka.info/data/summary.csv', encoding="shift-jis")
 osk_dates = []
 osk_daily_cases = pd.DataFrame({'counts': osk_row['陽性人数']}, index=osk_row['日付'])
@@ -65,133 +60,99 @@ osk_daily_cases.index = osk_datetimes
 osk_seasonal = sm.tsa.seasonal_decompose(osk_daily_cases.counts, period=7)
 osk_daily_cases['trend'] = osk_seasonal.trend
 
-# J-REITデータ
-# βとαの値を取得して表示する
-def calc_beta_alpha(x, y):
-    clf = linear_model.LinearRegression()
-    clf.fit(x, y)
-    print("β = ", list(itertools.chain.from_iterable(clf.coef_)))
-    print("α = ", clf.intercept_)
-
-# 対象銘柄のticker code
-ticker = "8951"
-ticker_codes = list(pd.read_html('https://j-reit.jp/brand/')[1][0].values)
-
-# 東証REIT指数のデータを取得
-reitsheet = pd.read_html(
-    "https://finance.matsui.co.jp/Stocks/matsui/contents/stockDetail.aspx?cntcode=JP&skubun=0&stkcode=0075&exctype=01&tab=2&pnum=6M&ptype=W#",
-    flavor='bs4')[0]
-reit_w_udratio = reitsheet[::-1]['終値'].pct_change().dropna() * 100
-
-weekly_ratios = []
-for c in list(pd.read_html('https://j-reit.jp/brand/')[1][0].values):
-    weekly_ratios.append(pd.read_html(
-    "https://finance.matsui.co.jp/Stocks/matsui/contents/stockDetail.aspx?cntcode=JP&skubun=1&stkcode=" + str(c) + "&exctype=01&tab=3&pnum=6M&ptype=W#'",
-    flavor='bs4')[0][::-1]['終値'].pct_change().dropna() * 100)
-tchange_df = pd.DataFrame(weekly_ratios, index=list(pd.read_html('https://j-reit.jp/brand/')[1][0].values)).T
-df = tchange_df.add_prefix('ticker')
-df['J-REIT Index'] = reit_w_udratio
-
-# 対象銘柄のデータを取得
-target_sheet = pd.read_html(
-    "https://finance.matsui.co.jp/Stocks/matsui/contents/stockDetail.aspx?cntcode=JP&skubun=1&stkcode=" + ticker + "&exctype=01&tab=3&pnum=6M&ptype=W#'",
-    flavor='bs4')[0]
-target_udratio = target_sheet[::-1]['終値'].pct_change().dropna() * 100
-
-# 単回帰分析
-# ud_df = pd.DataFrame({"J-REIT Index": reit_w_udratio,
-#                       "ticker" + ticker: target_udratio})
-
-
+# Hokkaido data
+hkd_data = pd.read_csv('https://www.harp.lg.jp/opendata/dataset/1369/resource/2853/covid19_data.csv', encoding="shift-jis")
+hkd_str_date = hkd_data['年'].astype(str) + '/' + hkd_data['月'].astype(str) + '/' + hkd_data['日'].astype(str)
+hkd_date = pd.to_datetime(hkd_str_date)
+hkd_df = hkd_data.drop(['グラフ非表示', '年', '月', '日', '日検査数', '検査累計', '陽性累計', '日患者数', '患者累計',
+       '日軽症中等症数', '軽症中等症累計', '日重症数', '重症累計', '日死亡数', '死亡累計', '日治療終了数',
+       '治療終了累計', '新規検査人数計', '陽性率％', '濃厚接触者', '濃厚接触者以外', '備考'], axis=1)
+hkd_df.index = hkd_date
+hkd_seasonal = sm.tsa.seasonal_decompose(hkd_df['日陽性数'], period=7)
+hkd_df['trend'] = hkd_seasonal.trend
 
 # Layout
 app.layout = html.Div(
     children=[
-        html.H1(children='COVID-19 Daily Cases in Japan'),
-        dcc.Graph(
-            id='graph1',
-            figure={
-                'data':[
-                    {'x': daily_cases.index,
-                    'y': daily_cases['counts'],
-                    'type': 'bar',
-                    'name': '新規感染者数'},
-                    {'x': daily_cases.index,
-                    'y': daily_cases['trend'],
-                    'type': 'line',
-                    'name': '7日移動平均'}
-                        ],
-                'layout': {'title': '東京都内新規感染者数'}
-                    }
-                ),
-        dcc.Graph(
-            id = "graph2",
-            figure = {
-                'data':[
-                    {'x': kan_daily_cases.index,
-                    'y': kan_daily_cases['counts'],
-                    'type': 'bar',
-                    'name': '新規感染者数'},
-                    {'x': kan_daily_cases.index,
-                    'y': kan_daily_cases['trend'],
-                    'type': 'line',
-                    'name': '7日移動平均'}
-                        ],
-                'layout': {'title': '神奈川県内新規感染者数'}
-                    }
-                ),
-        dcc.Graph(
-            id = "graph3",
-            figure = {
-                'data':[
-                    {'x': osk_daily_cases.index,
-                    'y': osk_daily_cases['counts'],
-                    'type': 'bar',
-                    'name': '新規感染者数'},
-                    {'x': osk_daily_cases.index,
-                    'y': osk_daily_cases['trend'],
-                    'type': 'line',
-                    'name': '7日移動平均'}
-                        ],
-                'layout': {'title': '大阪府内新規感染者数'}
-                    }
+        html.Div(
+            children=[
+                html.H1(children='COVID-19 Daily Cases in Japan'),
+                html.Div(
+                    children=[
+                        dcc.Graph(
+                            id='graph1',
+                            figure={
+                                'data':[
+                                    {'x': daily_cases.index,
+                                    'y': daily_cases['counts'],
+                                    'type': 'bar',
+                                    'name': '新規感染者数'},
+                                    {'x': daily_cases.index,
+                                    'y': daily_cases['trend'],
+                                    'type': 'line',
+                                    'name': '7日移動平均'}
+                                        ],
+                                'layout': {'title': '東京都内新規感染者数'}
+                                    }
+                                ),
+                        dcc.Graph(
+                            id = "graph2",
+                            figure = {
+                                'data':[
+                                    {'x': kan_daily_cases.index,
+                                    'y': kan_daily_cases['counts'],
+                                    'type': 'bar',
+                                    'name': '新規感染者数'},
+                                    {'x': kan_daily_cases.index,
+                                    'y': kan_daily_cases['trend'],
+                                    'type': 'line',
+                                    'name': '7日移動平均'}
+                                        ],
+                                'layout': {'title': '神奈川県内新規感染者数'}
+                                    }
+                                )],
+                                style = {'display': 'flex'}),
+                html.Div(
+                    children=[
+                        dcc.Graph(
+                            id = "graph3",
+                            figure = {
+                                'data':[
+                                    {'x': osk_daily_cases.index,
+                                    'y': osk_daily_cases['counts'],
+                                    'type': 'bar',
+                                    'name': '新規感染者数'},
+                                    {'x': osk_daily_cases.index,
+                                    'y': osk_daily_cases['trend'],
+                                    'type': 'line',
+                                    'name': '7日移動平均'}
+                                        ],
+                                'layout': {'title': '大阪府内新規感染者数'}
+                                    }
+                                ),
+                        dcc.Graph(
+                            id = "graph4",
+                            figure = {
+                                'data':[
+                                    {'x': hkd_df.index,
+                                    'y': hkd_df['日陽性数'],
+                                    'type': 'bar',
+                                    'name': '新規感染者数'},
+                                    {'x': hkd_df.index,
+                                    'y': hkd_df['trend'],
+                                    'type': 'line',
+                                    'name': '7日移動平均'}
+                                        ],
+                                'layout': {'title': '北海道内新規感染者数'}
+                                    }
+                                ),
+                    ],
+                    style = {'display': 'flex'}
                 )
-            ,
-        html.H1(children='J-REIT Index α & β'),
-        dcc.Input(id='ticker_symbol',
-                  value='8951'),
-        dcc.Graph(
-            id='graph4',
-            figure=px.scatter(
-                df,
-                x="J-REIT Index",
-                y="ticker" + ticker,
-                marginal_y="violin",
-                marginal_x="box",
-                trendline="ols",
-                template="simple_white"
-            ),
-            style={'width' : "50%"}
-        ),
-    ]
+            ],
+        )
+    ]            
 )
-
-
-from dash.dependencies import Input, Output
-@app.callback(
-    Output('graph4', 'figure'),
-    [Input('ticker_symbol', 'value')])
-def update_graph(stock_ticker):
-    fig = px.scatter(
-            df,
-            x="J-REIT Index",
-            y="ticker" + stock_ticker,
-            marginal_y="violin",
-            marginal_x="box",
-            trendline="ols",
-            template="simple_white"
-            )
-    return fig
 
 server = app.server
 
