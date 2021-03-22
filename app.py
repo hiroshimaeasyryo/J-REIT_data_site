@@ -34,7 +34,7 @@ osk_job = q.enqueue(load_osk_data, 'https://covid19-osaka.info/data/summary.csv'
 hkd_job = q.enqueue(load_hkd_data, 'https://www.harp.lg.jp/opendata/dataset/1369/resource/2853/covid19_data.csv')
 
 
-time.sleep(15)
+time.sleep(25)
 daily_cases = tky_job.result
 kan_daily_cases = kan_job.result
 osk_daily_cases = osk_job.result
