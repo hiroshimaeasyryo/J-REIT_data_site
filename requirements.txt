@@ -21,7 +21,7 @@ MarkupSafe==1.1.1
 numpy
 pandas
 patsy
-plotl
+plotly
 python-dateutil
 pytz
 redis
